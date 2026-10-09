@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eywa — AI Knowledge Graph Builder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d12;
+    --bg-panel:#10141b;
+    --bg-panel-2:#151a23;
+    --line:#232a36;
+    --text:#e7e9ee;
+    --text-dim:#8b94a3;
+    --cyan:#5fe3d3;
+    --amber:#f0a868;
+    --violet:#a78bfa;
+    --rose:#f0708a;
+    --danger:#f0708a;
+    --accent:#7ce3c9;
+    --accent-rgb:124,227,201;
+    --accent-deep:#45b89e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{height:100%;overflow:hidden;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;
+    height:100vh;
+    overflow:hidden;
+    background-image:
+      radial-gradient(circle at 15% 20%, rgba(var(--accent-rgb),0.05) 0%, transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(var(--accent-rgb),0.04) 0%, transparent 40%);
+  }
+  .app{display:flex;height:100vh;}
+
+  /* LEFT PANEL */
+  .sidebar{
+    width:380px;
+    min-width:380px;
+    background:var(--bg-panel);
+    border-right:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .brand{
+    padding:28px 24px 20px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand-mark{
+    display:flex;align-items:center;gap:10px;margin-bottom:6px;
+  }
+  .brand-dot{
+    width:10px;height:10px;border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 12px var(--accent);
+    animation:pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{opacity:1;transform:scale(1);}
+    50%{opacity:0.5;transform:scale(0.75);}
+  }
+  .brand h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:21px;font-weight:700;letter-spacing:0.02em;
+  }
+  .brand p{
+    font-size:12.5px;color:var(--text-dim);margin-top:6px;line-height:1.5;
+  }
+
+  .section{padding:20px 24px;border-bottom:1px solid var(--line);}
+  .section-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;
+    color:var(--text-dim);margin-bottom:10px;display:flex;align-items:center;gap:8px;
+  }
+  .section-label .num{color:var(--accent);}
+
+  input[type=password], textarea{
+    width:100%;
+    background:var(--bg-panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:13.5px;
+    padding:10px 12px;
+    resize:vertical;
+    transition:border-color 0.15s;
+  }
+  input[type=password]:focus, textarea:focus{
+    outline:none;border-color:var(--accent);
+  }
+  textarea{min-height:160px;line-height:1.5;}
+  .hint{font-size:11.5px;color:var(--text-dim);margin-top:8px;line-height:1.5;}
+  .hint a{color:var(--accent);text-decoration:none;}
+  .hint a:hover{text-decoration:underline;}
+
+  .examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .example-chip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    padding:5px 10px;
+    background:var(--bg-panel-2);
+    border:1px solid var(--line);
+    border-radius:20px;
+    color:var(--text-dim);
+    cursor:pointer;
+    transition:all 0.15s;
+  }
+  .example-chip:hover{border-color:var(--accent);color:var(--accent);}
+
+  .generate-btn{
+    width:100%;
+    padding:13px;
+    background:linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+    color:#0d0a1a;
+    border:none;
+    border-radius:8px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    margin-top:16px;
+    transition:transform 0.1s, box-shadow 0.15s;
+  }
+  .generate-btn:hover{box-shadow:0 0 22px rgba(var(--accent-rgb),0.4);}
+  .generate-btn:active{transform:scale(0.98);}
+  .generate-btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+  .status{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    margin-top:12px;
+    padding:10px 12px;
+    border-radius:8px;
+    display:none;
+    line-height:1.5;
+  }
+  .status.show{display:block;}
+  .status.loading{background:rgba(var(--accent-rgb),0.1);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.25);}
+  .status.error{background:rgba(240,112,138,0.08);color:var(--rose);border:1px solid rgba(240,112,138,0.2);}
+  .status.success{background:rgba(var(--accent-rgb),0.1);color:var(--accent);border:1px solid rgba(var(--accent-rgb),0.25);}
+
+  .legend{display:flex;flex-direction:column;gap:12px;}
+  .legend-item{display:flex;align-items:flex-start;gap:10px;}
+  .legend-swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+  .legend-title{font-size:12.5px;color:var(--text);font-weight:500;}
+  .legend-desc{font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;}
+
+  .detail-panel{
+    padding:20px 24px;flex:1;
+    max-height:52vh;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .detail-empty{font-size:12.5px;color:var(--text-dim);line-height:1.6;}
+  .node-title{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:17px;font-weight:600;margin-bottom:4px;
+  }
+  .node-type{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;
+    margin-bottom:14px;
+  }
+  .conn-list{display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch;}
+  .conn-item{
+    font-size:12.5px;padding:9px 11px;
+    background:var(--bg-panel-2);
+    border-radius:6px;
+    border-left:2px solid var(--accent);
+    line-height:1.5;
+  }
+  .conn-item .label{color:var(--text-dim);font-size:11px;display:block;margin-bottom:2px;font-family:'IBM Plex Mono',monospace;}
+
+  /* MAIN CANVAS */
+  .canvas-wrap{flex:1;position:relative;overflow:hidden;}
+  svg{width:100%;height:100%;cursor:grab;}
+  svg:active{cursor:grabbing;}
+
+  .empty-state{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    text-align:center;pointer-events:none;
+  }
+  .empty-state .glyph{
+    font-size:64px;margin-bottom:16px;opacity:0.15;
+    font-family:'Space Grotesk',sans-serif;
+  }
+  .empty-state h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:18px;color:var(--text-dim);font-weight:500;margin-bottom:8px;
+  }
+  .empty-state p{font-size:12.5px;color:var(--text-dim);opacity:0.7;max-width:280px;margin:0 auto;}
+
+  .toolbar{
+    position:absolute;top:20px;right:20px;
+    display:flex;gap:8px;z-index:10;
+  }
+  .tool-btn{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    width:36px;height:36px;
+    border-radius:8px;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    font-size:15px;
+    transition:all 0.15s;
+  }
+  .tool-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+  .search-box{
+    position:absolute;top:20px;left:20px;z-index:10;
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 12px;
+    display:flex;align-items:center;gap:8px;
+    width:220px;
+  }
+  .search-box input{
+    background:transparent;border:none;color:var(--text);
+    font-size:12.5px;width:100%;outline:none;
+    font-family:'IBM Plex Sans',sans-serif;
+  }
+  .search-box .icon{color:var(--text-dim);font-size:13px;}
+
+  .stats-bar{
+    position:absolute;bottom:20px;left:20px;z-index:10;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;color:var(--text-dim);
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 14px;
+    display:flex;gap:16px;
+  }
+  .stats-bar span b{color:var(--accent);font-weight:500;}
+
+  .node-popup{
+    position:absolute;
+    max-width:240px;
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px 14px;
+    z-index:30;
+    box-shadow:0 8px 28px rgba(0,0,0,0.45);
+    display:none;
+    pointer-events:auto;
+  }
+  .node-popup.show{ display:block; }
+  .node-popup .np-head{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;
+  }
+  .node-popup .np-title{
+    font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;
+  }
+  .node-popup .np-type{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;
+  }
+  .node-popup .np-close{
+    cursor:pointer;color:var(--text-dim);font-size:15px;line-height:1;padding:2px 4px;flex-shrink:0;
+  }
+  .node-popup .np-close:hover{ color:var(--text); }
+  .node-popup .np-summary{
+    font-size:12px;color:var(--text-dim);line-height:1.55;
+  }
+  .api-key-row{ display:flex; gap:6px; }
+  .api-key-row input{ flex:1; }
+  .clear-key-btn{
+    background:var(--bg-panel-2);border:1px solid var(--line);color:var(--text-dim);
+    border-radius:8px;padding:0 10px;cursor:pointer;font-size:12px;white-space:nowrap;
+  }
+  .clear-key-btn:hover{ color:var(--rose); border-color:var(--rose); }
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+
+  .node-label{
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:11px;fill:var(--text);pointer-events:none;
+    text-shadow:0 0 6px var(--bg), 0 0 6px var(--bg);
+  }
+  .edge-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9px;fill:var(--text-dim);pointer-events:none;
+  }
+
+  /* MOBILE / SMALL SCREEN: sidebar becomes a slide-out panel */
+  .sidebar-toggle{
+    display:none;
+    position:fixed;top:16px;left:16px;z-index:50;
+    width:40px;height:40px;border-radius:9px;
+    background:var(--bg-panel);border:1px solid var(--line);
+    color:var(--text);align-items:center;justify-content:center;
+    cursor:pointer;font-size:16px;
+    box-shadow:0 4px 14px rgba(0,0,0,0.35);
+  }
+  @media (max-width: 900px){
+    .sidebar-toggle{ display:flex; }
+    .sidebar{
+      position:fixed;top:0;left:0;height:100vh;z-index:40;
+      width:86vw;min-width:0;max-width:380px;
+      transform:translateX(-100%);
+      transition:transform 0.28s ease;
+      box-shadow:0 0 50px rgba(0,0,0,0.6);
+    }
+    .sidebar.open{ transform:translateX(0); }
+    .canvas-wrap{ width:100%; }
+    .toolbar, .search-box, .stats-bar{ z-index:10; }
+    .brand{ padding-left:64px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar-toggle" id="sidebarToggle">☰</div>
+<div class="app">
+  <div class="sidebar" id="sidebarPanel">
+    <div class="brand">
+      <div class="brand-mark">
+        <div class="brand-dot"></div>
+        <h1>eywa</h1>
+      </div>
+      <p>Paste any text. AI extracts the entities and relationships inside it and maps them as a living network.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span class="num">01</span> Gemini API Key</div>
+      <div class="api-key-row">
+        <input type="password" id="apiKey" placeholder="AIza...">
+        <button class="clear-key-btn" id="clearKeyBtn" title="Forget saved key">Clear</button>
+      </div>
+      <p class="hint">Free key from <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. Saved in your browser only (never sent anywhere else) so you don't have to re-paste it each time.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span class="num">02</span> Source Text</div>
+      <textarea id="inputText" placeholder="Paste an article, a story, meeting notes, a Wikipedia paragraph — anything with people, places, or organizations in it..."></textarea>
+      <div class="examples">
+        <div class="example-chip" data-example="history">Historical event</div>
+        <div class="example-chip" data-example="company">Company news</div>
+        <div class="example-chip" data-example="story">Short story</div>
+      </div>
+      <button class="generate-btn" id="generateBtn">Build Graph →</button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span class="num">03</span> Node Color Guide</div>
+      <div class="legend" id="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:#5fe3d3"></div><div><div class="legend-title">Person</div><div class="legend-desc">Individual people named in the text</div></div></div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#f0a868"></div><div><div class="legend-title">Organization</div><div class="legend-desc">Companies, institutions, teams, groups</div></div></div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#a78bfa"></div><div><div class="legend-title">Place</div><div class="legend-desc">Locations, cities, countries, geography</div></div></div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#f0708a"></div><div><div class="legend-title">Concept / Event</div><div class="legend-desc">Ideas, works, happenings, abstract terms</div></div></div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="detailPanel">
+      <div class="section-label"><span class="num">→</span> Node Details</div>
+      <div class="detail-empty">Click any node in the graph to inspect its connections.</div>
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <div class="search-box">
+      <span class="icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="Highlight a node...">
+    </div>
+    <div class="toolbar">
+      <button class="tool-btn" id="zoomIn" title="Zoom in">+</button>
+      <button class="tool-btn" id="zoomOut" title="Zoom out">−</button>
+      <button class="tool-btn" id="resetView" title="Reset view">⟲</button>
+    </div>
+    <svg id="graphSvg"></svg>
+    <div class="empty-state" id="emptyState">
+      <div class="glyph">◈</div>
+      <h2>No graph yet</h2>
+      <p>Add your API key, paste some text on the left, and hit Build Graph to see the network appear here.</p>
+    </div>
+    <div class="node-popup" id="nodePopup">
+      <div class="np-head">
+        <div class="np-title" id="npTitle"></div>
+        <div class="np-close" id="npClose">✕</div>
+      </div>
+      <div class="np-type" id="npType"></div>
+      <div class="np-summary" id="npSummary"></div>
+    </div>
+    <div class="stats-bar" id="statsBar" style="display:none;">
+      <span>Nodes <b id="nodeCount">0</b></span>
+      <span>Edges <b id="edgeCount">0</b></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const TYPE_COLORS = {
+  person: '#5fe3d3',
+  organization: '#f0a868',
+  place: '#a78bfa',
+  concept: '#f0708a',
+  event: '#f0708a'
+};
+
+const EXAMPLES = {
+  history: "The Wright Brothers, Orville and Wilbur, achieved the first powered flight at Kitty Hawk, North Carolina in 1903. Their company, the Wright Company, was later based in Dayton, Ohio. Their success influenced Glenn Curtiss, a rival aviator who founded Curtiss Aeroplane Company.",
+  company: "Satya Nadella, CEO of Microsoft, announced a new partnership with OpenAI to expand Azure's AI infrastructure. The deal, based in Redmond, Washington, follows Microsoft's earlier investment in OpenAI, led by Sam Altman. Analysts at Reuters noted the deal strengthens Microsoft's position against Google and Amazon.",
+  story: "Meera moved from Chennai to Bangalore to join Infosys as a data analyst. Her mentor, Arjun, introduced her to the AI research team led by Dr. Kavitha Rao. Together they worked on a project for a client based in Singapore, competing against a rival team from TCS."
+};
+
+let simulation, svg, g, zoomBehavior;
+let currentNodes = [], currentLinks = [];
+let activeNodeId = null;
+
+// Remember the API key locally so it doesn't need re-pasting each time
+const KEY_STORAGE = 'synapse_gemini_api_key';
+try{
+  const savedKey = localStorage.getItem(KEY_STORAGE);
+  if(savedKey){ document.getElementById('apiKey').value = savedKey; }
+}catch(e){ /* storage unavailable, ignore */ }
+
+document.getElementById('apiKey').addEventListener('change', () => {
+  try{
+    const val = document.getElementById('apiKey').value.trim();
+    if(val) localStorage.setItem(KEY_STORAGE, val);
+  }catch(e){}
+});
+
+document.getElementById('clearKeyBtn').addEventListener('click', () => {
+  try{ localStorage.removeItem(KEY_STORAGE); }catch(e){}
+  document.getElementById('apiKey').value = '';
+  showStatus('success', 'Saved key cleared — paste a new one anytime.');
+});
+
+document.querySelectorAll('.example-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.getElementById('inputText').value = EXAMPLES[chip.dataset.example];
+  });
+});
+
+document.getElementById('generateBtn').addEventListener('click', buildGraph);
+
+async function buildGraph(){
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const text = document.getElementById('inputText').value.trim();
+  const statusEl = document.getElementById('status');
+  const btn = document.getElementById('generateBtn');
+
+  if(!apiKey){ showStatus('error', 'Add your Gemini API key first.'); return; }
+  if(!text || text.length < 20){ showStatus('error', 'Paste some more text — at least a sentence or two.'); return; }
+
+  try{ localStorage.setItem(KEY_STORAGE, apiKey); }catch(e){}
+
+  btn.disabled = true;
+  showStatus('loading', '◌ Reading text and extracting the network...');
+
+  try{
+    const prompt = `You are a senior knowledge-engineering analyst. Read the passage below with full attention, word by word and sentence by sentence, and build a complete, accurate knowledge graph. Treat this as the final, authoritative pass — there is no second attempt, so nothing may be missed.
+
+How to read it:
+1. First pass — identify every named entity mentioned anywhere in the text: people, organizations, places, works (books/films/songs), concepts, and events. Include entities mentioned only once.
+2. Resolve references — when the text later refers to an entity by a pronoun or a generic phrase ("he", "she", "the company", "the novel", "the film"), link that mention back to the correct entity. Never create a separate node for a pronoun or a generic reference.
+3. Second pass — for every pair of entities the text connects, directly or implicitly, write the precise relationship in the direction the text states it (who did what to/with whom, and when relevant). Use the text's own verbs and facts (e.g. "wrote", "published in", "preceded by", "based on", "portrayed by", "set in", "adapted as", "acquired by", "serialised in") instead of generic words.
+4. Final check — make sure no two different entities were merged into one, no single entity was split into two under different names, and no relationship between two already-listed entities was missed.
+
+This text may be dense — a Wikipedia-style summary, a company history, a plot synopsis. Dense text still typically holds 15-30 real entities and even more relationships between them. Extract thoroughly, not conservatively; err on the side of including a relationship if the text supports it.
+
+Return ONLY valid JSON, no markdown fences, no commentary, in this exact shape:
+{"entities":[{"id":"short_unique_id","label":"Display Name","type":"person|organization|place|concept|event"}],"relationships":[{"source":"id1","target":"id2","label":"short, specific relationship phrase, 2-5 words"}]}
+
+Rules:
+- Up to 30 entities, prioritizing ones with at least one relationship.
+- Every relationship's source and target must exactly match an existing entity id.
+- No duplicate entities for the same real-world thing under different labels or spellings.
+- Vary relationship phrasing naturally; never default to "related to" or "connected to" unless the text itself is genuinely that vague.
+- Where the text gives a sequence of events (written → serialised → adapted → released), preserve that chronology as separate relationships rather than collapsing it into one generic link.
+
+Text:
+"""${text}"""`;
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.15, maxOutputTokens: 4096 }
+    });
+
+    const maxAttempts = 4;
+    let resp, lastStatus;
+    for(let attempt = 1; attempt <= maxAttempts; attempt++){
+      resp = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body });
+      if(resp.ok) break;
+      lastStatus = resp.status;
+      // 503 = model temporarily overloaded, 429 = rate limited — both are worth retrying
+      if((resp.status === 503 || resp.status === 429) && attempt < maxAttempts){
+        const waitMs = attempt * 1500;
+        showStatus('loading', `◌ Server busy (${resp.status}) — retrying automatically (${attempt}/${maxAttempts - 1})...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      break;
+    }
+
+    if(!resp.ok){
+      const friendly = lastStatus === 503
+        ? 'Google\'s model is overloaded right now even after retrying. Wait 30-60 seconds and hit Build Graph again.'
+        : `API error (${lastStatus}). Check your key is valid and has quota.`;
+      throw new Error(friendly);
+    }
+
+    const data = await resp.json();
+    let raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    let parsed;
+    try{ parsed = JSON.parse(raw); }
+    catch(e){ throw new Error('Model returned unexpected format. Try again or shorten the text.'); }
+
+    if(!parsed.entities || !parsed.relationships){
+      throw new Error('No entities found — try a text with more names, places, or organizations.');
+    }
+
+    renderGraph(parsed.entities, parsed.relationships);
+    showStatus('success', `✓ Extracted ${parsed.entities.length} nodes, ${parsed.relationships.length} connections.`);
+
+  }catch(err){
+    showStatus('error', err.message || 'Something went wrong. Check your API key and try again.');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function showStatus(type, msg){
+  const el = document.getElementById('status');
+  el.className = `status show ${type}`;
+  el.textContent = msg;
+}
+
+function renderGraph(entities, relationships){
+  activeNodeId = null;
+  document.getElementById('nodePopup').classList.remove('show');
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('statsBar').style.display = 'flex';
+  document.getElementById('nodeCount').textContent = entities.length;
+  document.getElementById('edgeCount').textContent = relationships.length;
+
+  currentNodes = entities.map(e => ({...e}));
+  const nodeIds = new Set(currentNodes.map(n => n.id));
+  currentLinks = relationships.filter(r => nodeIds.has(r.source) && nodeIds.has(r.target)).map(r => ({...r}));
+
+  const svgEl = d3.select('#graphSvg');
+  svgEl.selectAll('*').remove();
+  const width = document.querySelector('.canvas-wrap').clientWidth;
+  const height = document.querySelector('.canvas-wrap').clientHeight;
+
+  svg = svgEl.attr('viewBox', [0,0,width,height]);
+  g = svg.append('g');
+
+  zoomBehavior = d3.zoom().scaleExtent([0.2, 4]).on('zoom', (event) => {
+    g.attr('transform', event.transform);
+    repositionPopup();
+  });
+  svg.call(zoomBehavior);
+
+  const linkForce = d3.forceLink(currentLinks).id(d => d.id).distance(130).strength(0.5);
+
+  simulation = d3.forceSimulation(currentNodes)
+    .force('link', linkForce)
+    .force('charge', d3.forceManyBody().strength(-320))
+    .force('center', d3.forceCenter(width/2, height/2))
+    .force('collision', d3.forceCollide().radius(46));
+
+  const link = g.append('g').selectAll('line')
+    .data(currentLinks).join('line')
+    .attr('stroke', '#2a3341')
+    .attr('stroke-width', 1.4);
+
+  const edgeLabel = g.append('g').selectAll('text')
+    .data(currentLinks).join('text')
+    .attr('class', 'edge-label')
+    .text(d => d.label || '');
+
+  const node = g.append('g').selectAll('circle')
+    .data(currentNodes).join('circle')
+    .attr('r', 20)
+    .attr('fill', d => TYPE_COLORS[d.type] || '#8b94a3')
+    .attr('fill-opacity', 0.85)
+    .attr('stroke', d => TYPE_COLORS[d.type] || '#8b94a3')
+    .attr('stroke-width', 1.5)
+    .style('cursor', 'pointer')
+    .call(drag(simulation))
+    .on('click', (event, d) => { showDetail(d); showNodePopup(d); });
+
+  const label = g.append('g').selectAll('text')
+    .data(currentNodes).join('text')
+    .attr('class', 'node-label')
+    .attr('text-anchor', 'middle')
+    .attr('dy', 34)
+    .text(d => d.label);
+
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    edgeLabel
+      .attr('x', d => (d.source.x + d.target.x)/2)
+      .attr('y', d => (d.source.y + d.target.y)/2);
+    node.attr('cx', d => d.x).attr('cy', d => d.y);
+    label.attr('x', d => d.x).attr('y', d => d.y);
+    repositionPopup();
+  });
+}
+
+function drag(sim){
+  function started(event, d){
+    if(!event.active) sim.alphaTarget(0.3).restart();
+    d.fx = d.x; d.fy = d.y;
+  }
+  function dragged(event, d){ d.fx = event.x; d.fy = event.y; }
+  function ended(event, d){
+    if(!event.active) sim.alphaTarget(0);
+    d.fx = null; d.fy = null;
+  }
+  return d3.drag().on('start', started).on('drag', dragged).on('end', ended);
+}
+
+function buildNodeSummary(d){
+  const conns = currentLinks.filter(l => l.source.id === d.id || l.target.id === d.id);
+  if(conns.length === 0){
+    return `${d.label} appears in the text, but no clear connection to another entity was detected.`;
+  }
+
+  const outgoing = conns.filter(c => c.source.id === d.id)
+    .map(c => `${c.label || 'is linked to'} ${c.target.label}`);
+  const incoming = conns.filter(c => c.target.id === d.id)
+    .map(c => `${c.source.label} ${c.label || 'is linked to'} ${d.label}`);
+
+  const sentences = [];
+  const shownOut = outgoing.slice(0, 3);
+  const shownIn = incoming.slice(0, 3);
+
+  if(shownOut.length){
+    const joined = shownOut.length === 1 ? shownOut[0]
+      : shownOut.slice(0,-1).join(', ') + ', and ' + shownOut[shownOut.length-1];
+    sentences.push(`${d.label} ${joined}.`);
+  }
+  if(shownIn.length){
+    sentences.push(shownIn.join('. ') + '.');
+  }
+
+  let summary = sentences.join(' ');
+  const shownCount = shownOut.length + shownIn.length;
+  const remaining = conns.length - shownCount;
+  if(remaining > 0){
+    summary += ` There ${remaining === 1 ? 'is' : 'are'} ${remaining} more connection${remaining === 1 ? '' : 's'} for ${d.label} in the full graph.`;
+  }
+  return summary;
+}
+
+function showNodePopup(d){
+  activeNodeId = d.id;
+  const color = TYPE_COLORS[d.type] || '#8b94a3';
+  document.getElementById('npTitle').textContent = d.label;
+  document.getElementById('npType').textContent = d.type;
+  document.getElementById('npType').style.color = color;
+  document.getElementById('npSummary').textContent = buildNodeSummary(d);
+  document.getElementById('nodePopup').classList.add('show');
+  repositionPopup();
+}
+
+function repositionPopup(){
+  const popup = document.getElementById('nodePopup');
+  if(!activeNodeId || !popup.classList.contains('show') || !svg) return;
+  const d = currentNodes.find(n => n.id === activeNodeId);
+  if(!d || d.x == null) return;
+  const t = d3.zoomTransform(svg.node());
+  const [sx, sy] = t.apply([d.x, d.y]);
+  const wrap = document.querySelector('.canvas-wrap');
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  let left = sx + 26, top = sy - 20;
+  // Keep popup inside the visible canvas area
+  if(left + 250 > w) left = sx - 250 - 10;
+  if(top < 10) top = 10;
+  if(top + 160 > h) top = h - 170;
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+}
+
+document.getElementById('npClose').addEventListener('click', () => {
+  activeNodeId = null;
+  document.getElementById('nodePopup').classList.remove('show');
+});
+
+function showDetail(d){
+  const panel = document.getElementById('detailPanel');
+  const conns = currentLinks.filter(l => l.source.id === d.id || l.target.id === d.id);
+  const color = TYPE_COLORS[d.type] || '#8b94a3';
+
+  let html = `
+    <div class="section-label"><span class="num">→</span> Node Details</div>
+    <div class="node-title">${d.label}</div>
+    <div class="node-type" style="color:${color}">${d.type}</div>
+    <div class="conn-list">`;
+
+  if(conns.length === 0){
+    html += `<div class="conn-item">No connections found.</div>`;
+  } else {
+    conns.forEach(c => {
+      const isSource = c.source.id === d.id;
+      const other = isSource ? c.target : c.source;
+      html += `<div class="conn-item"><span class="label">${c.label || 'related to'}</span>${isSource ? d.label + ' → ' + other.label : other.label + ' → ' + d.label}</div>`;
+    });
+  }
+  html += `</div>`;
+  panel.innerHTML = html;
+}
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase().trim();
+  if(!g){
+    if(q) showStatus('warn', 'Build a graph first, then search will highlight matching nodes.');
+    return;
+  }
+  const isMatch = d => !q || d.label.toLowerCase().includes(q);
+
+  g.selectAll('circle')
+    .attr('fill-opacity', d => isMatch(d) ? 0.9 : 0.1)
+    .attr('stroke-width', d => (q && isMatch(d)) ? 4 : 1.5)
+    .attr('r', d => (q && isMatch(d)) ? 24 : 20);
+
+  g.selectAll('.node-label')
+    .attr('opacity', d => isMatch(d) ? 1 : 0.15)
+    .style('font-weight', d => (q && isMatch(d)) ? '700' : '400');
+
+  g.selectAll('line').attr('stroke-opacity', d =>
+    !q || isMatch(d.source) || isMatch(d.target) ? 0.9 : 0.08
+  );
+
+  // Auto-center the view on the first match so it's unmistakable
+  if(q){
+    const match = currentNodes.find(d => isMatch(d) && d.x != null);
+    if(match){
+      const wrap = document.querySelector('.canvas-wrap');
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      const scale = 1.3;
+      const tx = w/2 - match.x*scale, ty = h/2 - match.y*scale;
+      svg.transition().duration(400)
+        .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    }
+  }
+});
+
+document.getElementById('zoomIn').addEventListener('click', () => { if(svg) svg.transition().call(zoomBehavior.scaleBy, 1.3); });
+document.getElementById('zoomOut').addEventListener('click', () => { if(svg) svg.transition().call(zoomBehavior.scaleBy, 0.7); });
+document.getElementById('resetView').addEventListener('click', () => { if(svg) svg.transition().call(zoomBehavior.transform, d3.zoomIdentity); });
+
+// Mobile sidebar slide-out behavior
+const sidebarPanel = document.getElementById('sidebarPanel');
+const sidebarToggle = document.getElementById('sidebarToggle');
+
+function isMobile(){ return window.innerWidth <= 900; }
+
+if(isMobile()){ sidebarPanel.classList.add('open'); }
+
+sidebarToggle.addEventListener('click', () => {
+  sidebarPanel.classList.toggle('open');
+});
+
+// Close sidebar automatically on mobile after a graph is generated, so the graph is fully visible
+const originalRenderGraph = renderGraph;
+renderGraph = function(entities, relationships){
+  originalRenderGraph(entities, relationships);
+  if(isMobile()){
+    setTimeout(() => sidebarPanel.classList.remove('open'), 400);
+  }
+};
+</script>
+</body>
+</html>
